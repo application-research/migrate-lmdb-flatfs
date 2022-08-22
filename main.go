@@ -12,6 +12,7 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	lmdb "github.com/filecoin-project/go-bs-lmdb"
 	blocks "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-datastore"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/urfave/cli/v2"
@@ -163,10 +164,18 @@ func createTmpFlatfsBlockstore(blockstorePath string, shardingFunctionString str
 		return nil, nil, fmt.Errorf("invalid sharding function '%s': %v", shardingFunctionString, err)
 	}
 	fmt.Printf("Creating new temporary flatfs blockstore at '%s'\n", blockstorePath)
-	flatfsDatastore, err := flatfs.CreateOrOpen(blockstorePath, shardingFunction, true)
+	flatfsDatastore, err := flatfs.CreateOrOpen(blockstorePath, shardingFunction, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not create temporary flatfs blockstore: %v", err)
 	}
 
-	return blockstore.NewBlockstoreNoPrefix(flatfsDatastore), flatfsDatastore.Close, nil
+	return blockstore.NewBlockstoreNoPrefix(flatfsDatastore), func() error {
+		if err := flatfsDatastore.Sync(context.Background(), datastore.NewKey("/")); err != nil {
+			return err
+		}
+		if err := flatfsDatastore.Close(); err != nil {
+			return err
+		}
+		return nil
+	}, nil
 }
