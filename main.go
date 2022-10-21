@@ -24,6 +24,11 @@ func main() {
 			Name:  "sharding-function",
 			Value: "/repo/flatfs/shard/v1/next-to-last/3",
 		},
+		&cli.UintFlag{
+			Name:  "buf-len",
+			Usage: "How many blocks to write at a time using PutMany",
+			Value: 1000,
+		},
 	}
 	app.Action = func(ctx *cli.Context) error {
 		maybeRelativePath := ctx.Args().Get(0)
@@ -56,7 +61,7 @@ func main() {
 
 		// Move all the blocks from lmdb blockstore to flatfs blockstore
 		fmt.Printf("Writing blocks...\n")
-		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize); err != nil {
+		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize, ctx.Uint("buf-len")); err != nil {
 			return err
 		}
 		fmt.Printf("Done\n")
@@ -94,6 +99,7 @@ func transferBlocks(
 	from blockstore.Blockstore,
 	to blockstore.Blockstore,
 	size int64,
+	bufLen uint,
 ) error {
 
 	allLMDBKeys, err := from.AllKeysChan(ctx)
@@ -101,7 +107,8 @@ func transferBlocks(
 		return fmt.Errorf("could not get all lmdb keys channel: %v", err)
 	}
 
-	var buffer []blocks.Block
+	buffer := make([]blocks.Block, bufLen)
+	bufferIndex := uint(0)
 
 	bar := pb.New64(size).Set(pb.Bytes, true).Set(pb.CleanOnFinish, true)
 	bar.Start()
@@ -113,12 +120,12 @@ func transferBlocks(
 			return fmt.Errorf("could not get expected block '%s' from lmdb blockstore: %v", cid, err)
 		}
 
-		buffer = append(buffer, block)
-		if len(buffer) >= 100 {
+		buffer[bufferIndex] = block
+		if bufferIndex == bufLen {
 			if err := to.PutMany(ctx, buffer); err != nil {
 				return fmt.Errorf("could not write block '%s' to flatfs blockstore: %v", cid, err)
 			}
-			buffer = nil
+			bufferIndex = 0
 		}
 
 		bar.Add(len(block.RawData()))
@@ -147,7 +154,7 @@ func createFlatfsBlockstore(blockstorePath string, shardingFunctionString string
 	fmt.Printf("Creating new temporary flatfs blockstore at '%s'\n", blockstorePath)
 	flatfsDatastore, err := flatfs.CreateOrOpen(blockstorePath, shardingFunction, false)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not create temporary flatfs blockstore: %v", err)
+		return nil, nil, fmt.Errorf("could not create flatfs blockstore: %v", err)
 	}
 
 	return blockstore.NewBlockstoreNoPrefix(flatfsDatastore), func() error {
