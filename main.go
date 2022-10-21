@@ -114,7 +114,7 @@ func transferBlocks(
 	bar.Start()
 	defer bar.Finish()
 
-	writeQueue := make(chan []blocks.Block, 1)
+	writeQueue := make(chan []blocks.Block, 3)
 
 	var wg sync.WaitGroup
 
