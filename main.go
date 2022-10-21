@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/cheggaaa/pb/v3"
 	lmdb "github.com/filecoin-project/go-bs-lmdb"
@@ -107,12 +108,26 @@ func transferBlocks(
 		return fmt.Errorf("could not get all lmdb keys channel: %v", err)
 	}
 
-	buffer := make([]blocks.Block, bufLen)
-	bufferIndex := uint(0)
+	var buffer []blocks.Block
 
 	bar := pb.New64(size).Set(pb.Bytes, true).Set(pb.CleanOnFinish, true)
 	bar.Start()
 	defer bar.Finish()
+
+	writeQueue := make(chan []blocks.Block, 1)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for blocks := range writeQueue {
+			if err := to.PutMany(ctx, blocks); err != nil {
+				fmt.Printf("could not write blocks to flatfs blockstore: %v", err)
+				os.Exit(1)
+			}
+		}
+	}()
 
 	for cid := range allLMDBKeys {
 		block, err := from.Get(ctx, cid)
@@ -120,16 +135,18 @@ func transferBlocks(
 			return fmt.Errorf("could not get expected block '%s' from lmdb blockstore: %v", cid, err)
 		}
 
-		buffer[bufferIndex] = block
-		if bufferIndex == bufLen {
-			if err := to.PutMany(ctx, buffer); err != nil {
-				return fmt.Errorf("could not write block '%s' to flatfs blockstore: %v", cid, err)
-			}
-			bufferIndex = 0
+		buffer = append(buffer, block)
+		if len(buffer) == int(bufLen) {
+			writeQueue <- buffer
+			buffer = nil
 		}
 
 		bar.Add(len(block.RawData()))
 	}
+
+	close(writeQueue)
+
+	wg.Wait()
 
 	return nil
 }
