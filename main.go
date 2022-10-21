@@ -119,16 +119,18 @@ func transferBlocks(
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for blocks := range writeQueue {
-			if err := to.PutMany(ctx, blocks); err != nil {
-				fmt.Printf("could not write blocks to flatfs blockstore: %v", err)
-				os.Exit(1)
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for blocks := range writeQueue {
+				if err := to.PutMany(ctx, blocks); err != nil {
+					fmt.Printf("could not write blocks to flatfs blockstore: %v", err)
+					os.Exit(1)
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	for cid := range allLMDBKeys {
 		block, err := from.Get(ctx, cid)
