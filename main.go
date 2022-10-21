@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/cheggaaa/pb/v3"
 	lmdb "github.com/filecoin-project/go-bs-lmdb"
@@ -21,7 +18,7 @@ import (
 func main() {
 	app := cli.NewApp()
 	app.Usage = "[lmdb blockstore path]"
-	app.Description = "Replaces an lmdb blockstore with a new unprefixed flatfs blockstore and creates a backup of the old lmdb blockstore"
+	app.Description = "Migrates lmdb blockstore to flatfs"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:  "sharding-function",
@@ -47,13 +44,10 @@ func main() {
 			return err
 		}
 
-		// Create the flatfs blockstore to write into in the tmp directory
-		tmpFlatfsBlockstorePath := path.Join(
-			path.Dir(absolutePath),
-			fmt.Sprintf("migrate-lmdb-flatfs-tmp-%d", rand.Uint32()),
-		)
-		flatfsBlockstore, flatfsBlockstoreCloser, err := createTmpFlatfsBlockstore(
-			tmpFlatfsBlockstorePath,
+		// Create the flatfs blockstore to write into
+		flatfsBlockstorePath := absolutePath + "-migrated"
+		flatfsBlockstore, flatfsBlockstoreCloser, err := createFlatfsBlockstore(
+			flatfsBlockstorePath,
 			ctx.String("sharding-function"),
 		)
 		if err != nil {
@@ -69,19 +63,6 @@ func main() {
 
 		if err := flatfsBlockstoreCloser(); err != nil {
 			return fmt.Errorf("failed to close flatfs blockstore: %v", err)
-		}
-
-		// Move the old blockstore to the backup location so the new blockstore can be placed
-		backupPath := strings.TrimRight(absolutePath, "/\\") + "-backup"
-		fmt.Printf("Moving old blockstore to backup path '%s'\n", backupPath)
-		if err := os.Rename(absolutePath, backupPath); err != nil {
-			return fmt.Errorf("failed to move old blockstore to backup location: %v", err)
-		}
-
-		// Move the new blockstore to the target location
-		fmt.Printf("Moving new blockstore to target path '%s'\n", absolutePath)
-		if err := os.Rename(tmpFlatfsBlockstorePath, absolutePath); err != nil {
-			return fmt.Errorf("failed to move new blockstore to target location: %v", err)
 		}
 
 		fmt.Printf("Finished\n")
@@ -158,7 +139,7 @@ func openOldLMDBBlockstore(blockstorePath string) (blockstore.Blockstore, error)
 	return lmdbBlockstore, nil
 }
 
-func createTmpFlatfsBlockstore(blockstorePath string, shardingFunctionString string) (blockstore.Blockstore, func() error, error) {
+func createFlatfsBlockstore(blockstorePath string, shardingFunctionString string) (blockstore.Blockstore, func() error, error) {
 	shardingFunction, err := flatfs.ParseShardFunc(shardingFunctionString)
 	if err != nil {
 		return nil, nil, fmt.Errorf("invalid sharding function '%s': %v", shardingFunctionString, err)
