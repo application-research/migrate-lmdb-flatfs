@@ -28,7 +28,7 @@ func main() {
 		&cli.UintFlag{
 			Name:  "buf-len",
 			Usage: "How many blocks to write at a time using PutMany",
-			Value: 1000,
+			Value: 100000,
 		},
 	}
 	app.Action = func(ctx *cli.Context) error {
