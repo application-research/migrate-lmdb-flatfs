@@ -61,6 +61,7 @@ func main() {
 		}
 
 		// Move all the blocks from lmdb blockstore to flatfs blockstore
+		fmt.Printf("Using buf len: %v\n", ctx.Uint("buf-len"))
 		fmt.Printf("Writing blocks...\n")
 		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize, ctx.Uint("buf-len")); err != nil {
 			return err
