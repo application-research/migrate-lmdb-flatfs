@@ -35,6 +35,11 @@ func main() {
 			Usage: "How many concurrent write workers to use",
 			Value: 3,
 		},
+		&cli.BoolFlag{
+			Name:  "print-blocks",
+			Usage: "whether to print the CID of each migrated block",
+			Value: false,
+		},
 	}
 	app.Action = func(ctx *cli.Context) error {
 		maybeRelativePath := ctx.Args().Get(0)
@@ -68,7 +73,15 @@ func main() {
 		// Move all the blocks from lmdb blockstore to flatfs blockstore
 		fmt.Printf("Using buf len: %v\n", ctx.Uint("buf-len"))
 		fmt.Printf("Writing blocks...\n")
-		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize, ctx.Uint("buf-len"), ctx.Uint("num-workers")); err != nil {
+		if err := transferBlocks(
+			ctx.Context,
+			lmdbBlockstore,
+			flatfsBlockstore,
+			lmdbBlockstoreSize,
+			ctx.Uint("buf-len"),
+			ctx.Uint("num-workers"),
+			ctx.Bool("print-blocks"),
+		); err != nil {
 			return err
 		}
 		fmt.Printf("Done\n")
@@ -108,6 +121,7 @@ func transferBlocks(
 	size int64,
 	bufLen uint,
 	numWorkers uint,
+	printBlocks bool,
 ) error {
 
 	allLMDBKeys, err := from.AllKeysChan(ctx)
@@ -148,6 +162,10 @@ func transferBlocks(
 		if len(buffer) == int(bufLen) {
 			writeQueue <- buffer
 			buffer = nil
+		}
+
+		if printBlocks {
+			fmt.Println("=> %s\n", cid)
 		}
 
 		bar.Add(len(block.RawData()))
