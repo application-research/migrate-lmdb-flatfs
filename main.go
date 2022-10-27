@@ -165,7 +165,7 @@ func transferBlocks(
 		}
 
 		if printBlocks {
-			fmt.Println("=> %s\n", cid)
+			fmt.Printf("=> %s\n", cid)
 		}
 
 		bar.Add(len(block.RawData()))
@@ -180,8 +180,9 @@ func transferBlocks(
 
 func openOldLMDBBlockstore(blockstorePath string) (blockstore.Blockstore, error) {
 	lmdbBlockstore, err := lmdb.Open(&lmdb.Options{
-		Path:   blockstorePath,
-		NoSync: true,
+		Path:     blockstorePath,
+		NoSync:   true,
+		ReadOnly: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not open the target directory as an lmdb blockstore: %v", err)
