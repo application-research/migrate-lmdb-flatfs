@@ -30,6 +30,11 @@ func main() {
 			Usage: "How many blocks to write at a time using PutMany",
 			Value: 10000,
 		},
+		&cli.UintFlag{
+			Name:  "num-workers",
+			Usage: "How many concurrent write workers to use",
+			Value: 3,
+		},
 	}
 	app.Action = func(ctx *cli.Context) error {
 		maybeRelativePath := ctx.Args().Get(0)
@@ -63,7 +68,7 @@ func main() {
 		// Move all the blocks from lmdb blockstore to flatfs blockstore
 		fmt.Printf("Using buf len: %v\n", ctx.Uint("buf-len"))
 		fmt.Printf("Writing blocks...\n")
-		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize, ctx.Uint("buf-len")); err != nil {
+		if err := transferBlocks(ctx.Context, lmdbBlockstore, flatfsBlockstore, lmdbBlockstoreSize, ctx.Uint("buf-len"), ctx.Uint("num-workers")); err != nil {
 			return err
 		}
 		fmt.Printf("Done\n")
@@ -102,6 +107,7 @@ func transferBlocks(
 	to blockstore.Blockstore,
 	size int64,
 	bufLen uint,
+	numWorkers uint,
 ) error {
 
 	allLMDBKeys, err := from.AllKeysChan(ctx)
@@ -119,7 +125,7 @@ func transferBlocks(
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < int(numWorkers); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
