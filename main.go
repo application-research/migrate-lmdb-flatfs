@@ -180,9 +180,8 @@ func transferBlocks(
 
 func openOldLMDBBlockstore(blockstorePath string) (blockstore.Blockstore, error) {
 	lmdbBlockstore, err := lmdb.Open(&lmdb.Options{
-		Path:     blockstorePath,
-		NoSync:   true,
-		ReadOnly: true,
+		Path:   blockstorePath,
+		NoSync: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not open the target directory as an lmdb blockstore: %v", err)
